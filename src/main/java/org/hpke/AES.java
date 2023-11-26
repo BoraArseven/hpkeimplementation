@@ -1,64 +1,102 @@
 package org.hpke;
 
-import javax.crypto.*;
+import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-
-/**
- * Possible KEY_SIZE values are 128, 192 and 256
- * Possible T_LEN values are 128, 120, 112, 104 and 96
- */
+import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
+import java.security.SecureRandom;
 
 public class AES {
-    private SecretKey key;
-    private final int KEY_SIZE = 128;
-    private final int T_LEN = 128;
-    private Cipher encryptionCipher;
 
-    public void init() throws Exception {
-        KeyGenerator generator = KeyGenerator.getInstance("AES");
-        generator.init(KEY_SIZE);
-        key = generator.generateKey();
+    // The tag length should be 16 bytes (128 bits)
+    private static final int tagLength = 16 * 8;
+
+    public static void main(String[] args) throws Exception {
+        // The derivedkey should be 16 bytes (128 bits) for AES-128
+        byte[] derivedkey = new byte[] {0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+                0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+
+        // The message to be encrypted
+        byte[] message = "Hello, world!".getBytes();
+
+        // Encrypt the message using AEAD
+        byte[] ciphertext = encrypt(derivedkey, message);
+
+        // Decrypt the ciphertext using AEAD
+        byte[] plaintext = decrypt(derivedkey, ciphertext);
+
+        // Print the decrypted message
+        System.out.println(new String(plaintext));
     }
 
-    public String encrypt(String message) throws Exception {
-        byte[] messageInBytes = message.getBytes();
-        encryptionCipher = Cipher.getInstance("AES/GCM/NoPadding");
-        encryptionCipher.init(Cipher.ENCRYPT_MODE, key);
-        byte[] encryptedBytes = encryptionCipher.doFinal(messageInBytes);
-        return encode(encryptedBytes);
+    // Encrypts a message using AEAD with AES/GCM/NoPadding
+    public static byte[] encrypt(byte[] key, byte[] message) throws Exception {
+        // Create a secret key from the derived key
+        SecretKeySpec secretKey = new SecretKeySpec(key, "AES");
+
+        // Create a cipher instance for AES/GCM/NoPadding
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+
+        // Generate a random nonce of 12 bytes
+        SecureRandom random = new SecureRandom();
+        byte[] nonce = new byte[12];
+        random.nextBytes(nonce);
+
+        // Initialize the cipher with the secret key and the GCM parameters
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(tagLength, nonce));
+
+        // Generate some associated data to be authenticated
+        byte[] associatedData = new byte[] {0x0d, 0x0e, 0x0f, 0x10};
+
+        // Update the cipher with the associated data
+        cipher.updateAAD(associatedData);
+
+        // Encrypt the message and return the ciphertext
+        byte[] ciphertext = cipher.doFinal(message);
+
+        // Create an output stream to concatenate the nonce, the associated data, and the ciphertext
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        // Write the nonce to the output stream
+        output.write(nonce);
+
+        // Write the associated data to the output stream
+        output.write(associatedData);
+
+        // Write the ciphertext to the output stream
+        output.write(ciphertext);
+
+        // Return the output as a byte array
+        return output.toByteArray();
     }
 
-    public String decrypt(String encryptedMessage) throws BadPaddingException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException, IllegalBlockSizeException {
-        byte[] messageInBytes = decode(encryptedMessage);
-        Cipher decryptionCipher = Cipher.getInstance("AES/GCM/NoPadding");
-        GCMParameterSpec spec = new GCMParameterSpec(T_LEN, encryptionCipher.getIV());
-        decryptionCipher.init(Cipher.DECRYPT_MODE, key, spec);
-        byte[] decryptedBytes = decryptionCipher.doFinal(messageInBytes);
-        return new String(decryptedBytes);
-    }
+    // Decrypts a ciphertext using AEAD with AES/GCM/NoPadding
+    public static byte[] decrypt(byte[] key, byte[] ciphertext) throws Exception {
+        // Create a secret key from the derived key
+        SecretKeySpec secretKey = new SecretKeySpec(key, "AES");
 
-    private String encode(byte[] data) {
-        return Base64.getEncoder().encodeToString(data);
-    }
+        // Create a cipher instance for AES/GCM/NoPadding
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
 
-    private byte[] decode(String data) {
-        return Base64.getDecoder().decode(data);
-    }
+        // Extract the nonce from the first 12 bytes of the ciphertext
+        byte[] nonce = new byte[12];
+        System.arraycopy(ciphertext, 0, nonce, 0, 12);
 
-    public static void main(String[] args) {
-        try {
-            AES aes = new AES();
-            aes.init();
-            String encryptedMessage = aes.encrypt("TheXCoders");
-            String decryptedMessage = aes.decrypt(encryptedMessage);
+        // Initialize the cipher with the secret key and the GCM parameters
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(tagLength, nonce));
 
-            System.err.println("Encrypted Message : " + encryptedMessage);
-            System.err.println("Decrypted Message : " + decryptedMessage);
-        } catch (Exception ignored) {
-        }
+        // Extract the associated data from the next 4 bytes of the ciphertext
+        byte[] associatedData = new byte[4];
+        System.arraycopy(ciphertext, 12, associatedData, 0, 4);
+
+        // Update the cipher with the associated data
+        cipher.updateAAD(associatedData);
+
+        // Extract the actual ciphertext from the remaining bytes of the ciphertext
+        byte[] actualCiphertext = new byte[ciphertext.length - 16];
+        System.arraycopy(ciphertext, 16, actualCiphertext, 0, actualCiphertext.length);
+
+        // Decrypt the ciphertext and return the plaintext
+        return cipher.doFinal(actualCiphertext);
     }
 }
