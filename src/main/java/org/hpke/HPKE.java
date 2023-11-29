@@ -9,18 +9,25 @@
     // then press Enter. You can now see whitespace characters in your code.
     public class HPKE {
         public static void main(String[] args) throws Exception {
-            //Receiver side
+            //Setup is for
+            //DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-128-GCM
+            //Look A.1.1 at official page https://datatracker.ietf.org/doc/rfc9180/
+            //We could not implement all of the functions since they are many
+            //Time is up when I just got it :(
+            //
+            //Receiver side, key algorithm is X25519
             var kpg = KeyPairGenerator.getInstance("X25519");
             KeyPair kp_receiver = kpg.generateKeyPair(); // Generate a key pair for the receiver
 
 
-            //Sender side
+            //Sender side, KEM instance uses DHKEM
             javax.crypto.KEM kem1 = javax.crypto.KEM.getInstance("DHKEM");
             KeyPair kp_sender = kpg.generateKeyPair(); // Generate a key pair for the sender
             var sender = kem1.newEncapsulator(kp_receiver.getPublic()); // Use the receiver's public key for encapsulation
             var encapsulated = sender.encapsulate();
             var k1 = encapsulated.key();
 
+            // Receiver side
             // Receiver side
             var kem2 = javax.crypto.KEM.getInstance("DHKEM");
             var receiver = kem2.newDecapsulator(kp_receiver.getPrivate());
@@ -37,6 +44,7 @@
             assert Arrays.equals(k1.getEncoded(), k2.getEncoded());
             // end of the KEM
             // KDFN(hkdf)
+
             var kdf = HKDF.fromHmacSha256();
             byte[] salt = new byte[kdf.getMacFactory().getMacLengthBytes()]; // Generate a random salt of the same length as the hash output
             SecureRandom random = new SecureRandom();
