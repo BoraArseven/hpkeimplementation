@@ -3,6 +3,8 @@
     import javax.crypto.DecapsulateException;
     import java.security.*;
     import java.util.Arrays;
+    import java.util.stream.Stream;
+
     import org.hpke.HKDF;
     import org.hpke.AES;
     // Press Shift twice to open the Search Everywhere dialog and type `show whitespaces`,
@@ -33,6 +35,9 @@
             var receiver = kem2.newDecapsulator(kp_receiver.getPrivate());
             var k2 = receiver.decapsulate(encapsulated.encapsulation());
             // Bora's addition
+
+
+            System.out.println(" ");
             for (int i = 0; i < k1.getEncoded().length; i++) {
                 System.out.print(k1.getEncoded()[i]);
             }
